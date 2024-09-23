@@ -125,8 +125,6 @@ router.get('/schedule/:department_name/:date', async (req, res) => {
 });
 
 
-
-
 // GET all employees
 router.get('/', async (req, res) => {
   try {
@@ -136,5 +134,39 @@ router.get('/', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+// Update WFH_Recurring_Request DB after staff submits recurring WFH request form
+router.post('/wfh_recurring_request', async (req, res) => {
+  const { staff_id, start_date, end_date, day_of_week, approved, rejected, reason } = req.body;
+
+  // Validate required fields
+  if (!staff_id || !start_date || !end_date || !day_of_week) {
+    return res.status(400).json({ message: 'Staff ID, start date, end date, and day of week are required.' });
+  }
+
+  try {
+    // Insert or update the recurring work-from-home request
+    const result = await client.query(
+      `
+      INSERT INTO WFH_Recurring_Request (Staff_ID, Start_date, End_date, Day_of_week, Approved, Rejected, Reason)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (Staff_ID, Start_date, Day_of_week)
+      DO UPDATE SET
+        End_date = EXCLUDED.End_date,
+        Approved = EXCLUDED.Approved,
+        Rejected = EXCLUDED.Rejected,
+        Reason = EXCLUDED.Reason
+      RETURNING *;
+      `,
+      [staff_id, start_date, end_date, day_of_week, approved || false, rejected || false, reason || null]
+    );
+    
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+
 
 module.exports = router;
